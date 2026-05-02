@@ -1,0 +1,14 @@
+.DS_Store
+.mapping_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.venv/
+backend/.venv/
+backend/htmlcov/
+backend/.coverage
+frontend/dist/
+frontend/node_modules/
+frontend/.vite/
+*.tsbuildinfo

@@ -54,7 +54,7 @@ export default function App() {
       }
     }, 150);
     return () => window.clearTimeout(timeout);
-  }, [project, chunks.length]);
+  }, [project?.cache_id, project?.root_crop, project?.layers, chunks.length]);
 
   async function hydrateProject(nextProject = project) {
     if (!nextProject) return;

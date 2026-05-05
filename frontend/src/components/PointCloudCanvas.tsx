@@ -70,6 +70,8 @@ export function PointCloudCanvas({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const pointCloudGroupRef = useRef<THREE.Group | null>(null);
+  const overlayGroupRef = useRef<THREE.Group | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const viewportRef = useRef<BirdseyeViewport | null>(null);
   const projectKeyRef = useRef<string | null>(null);
@@ -96,11 +98,17 @@ export function PointCloudCanvas({
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10000, 10000);
     camera.position.set(0, 0, 10);
     camera.lookAt(0, 0, 0);
+    const pointCloudGroup = new THREE.Group();
+    const overlayGroup = new THREE.Group();
+    scene.add(pointCloudGroup);
+    scene.add(overlayGroup);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
     sceneRef.current = scene;
+    pointCloudGroupRef.current = pointCloudGroup;
+    overlayGroupRef.current = overlayGroup;
     cameraRef.current = camera;
     rendererRef.current = renderer;
 
@@ -122,20 +130,24 @@ export function PointCloudCanvas({
     return () => {
       observer.disconnect();
       disposeScene(scene);
+      pointCloudGroupRef.current = null;
+      overlayGroupRef.current = null;
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
   }, []);
 
   useEffect(() => {
-    const scene = sceneRef.current;
+    const pointCloudGroup = pointCloudGroupRef.current;
+    const overlayGroup = overlayGroupRef.current;
     const container = containerRef.current;
-    if (!scene || !container) return;
+    if (!pointCloudGroup || !overlayGroup || !container) return;
 
     if (!project) {
       projectKeyRef.current = null;
       viewportRef.current = null;
-      disposeScene(scene);
+      disposeGroup(pointCloudGroup);
+      disposeGroup(overlayGroup);
       renderCurrentView();
       return;
     }
@@ -148,8 +160,7 @@ export function PointCloudCanvas({
       );
     }
 
-    disposeScene(scene);
-    scene.background = new THREE.Color("#101417");
+    disposeGroup(pointCloudGroup);
 
     for (const chunk of chunks) {
       const geometry = new THREE.BufferGeometry();
@@ -163,32 +174,46 @@ export function PointCloudCanvas({
         vertexColors: true,
         sizeAttenuation: false
       });
-      scene.add(new THREE.Points(geometry, material));
+      pointCloudGroup.add(new THREE.Points(geometry, material));
     }
 
-    for (const layer of project.layers) {
+    renderCurrentView();
+  }, [chunks, projectKey, colorMode, bounds]);
+
+  useEffect(() => {
+    const overlayGroup = overlayGroupRef.current;
+    if (!overlayGroup) return;
+
+    disposeGroup(overlayGroup);
+
+    if (!layers) {
+      renderCurrentView();
+      return;
+    }
+
+    for (const layer of layers) {
       if (!layer.enabled || layer.polygon.length < 3) continue;
       const isActive = layer.id === activeLayerId;
       const polygon =
         dragPreview && dragPreview.layerId === layer.id
           ? replacePolygonVertex(layer.polygon, dragPreview.vertexIndex, dragPreview.point)
           : layer.polygon;
-      addPolygonLine(scene, polygon, isActive ? "#f6c453" : "#7da7b5", isActive ? 3 : 2, true);
+      addPolygonLine(overlayGroup, polygon, isActive ? "#f6c453" : "#7da7b5", isActive ? 3 : 2, true);
       if (isActive && draftPolygon === null) {
-        addVertexHandles(scene, polygon, "#f6c453", 9, 4);
+        addVertexHandles(overlayGroup, polygon, "#f6c453", 9, 4);
       }
     }
 
     if (draftPolygon !== null) {
-      addPolygonLine(scene, draftPolygon, "#f6c453", 5, false);
-      addVertexHandles(scene, draftPolygon, "#f6c453", 8, 6);
+      addPolygonLine(overlayGroup, draftPolygon, "#f6c453", 5, false);
+      addVertexHandles(overlayGroup, draftPolygon, "#f6c453", 8, 6);
       if (draftPolygon.length >= 3) {
-        addVertexHandles(scene, [draftPolygon[0]], "#edf4f7", 12, 7);
+        addVertexHandles(overlayGroup, [draftPolygon[0]], "#edf4f7", 12, 7);
       }
     }
 
     renderCurrentView();
-  }, [chunks, projectKey, colorMode, bounds, layers, activeLayerId, draftPolygon, dragPreview]);
+  }, [layers, activeLayerId, draftPolygon, dragPreview]);
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
     if (!project || !containerRef.current || !viewportRef.current) return;
@@ -431,7 +456,7 @@ function worldToScreen(
 }
 
 function addPolygonLine(
-  scene: THREE.Scene,
+  target: THREE.Object3D,
   polygon: PolygonPoint[],
   color: string,
   z: number,
@@ -441,11 +466,11 @@ function addPolygonLine(
   const linePoints = closed && polygon.length >= 3 ? [...polygon, polygon[0]] : polygon;
   const points = linePoints.map(([x, y]) => new THREE.Vector3(x, y, z));
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color })));
+  target.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color })));
 }
 
 function addVertexHandles(
-  scene: THREE.Scene,
+  target: THREE.Object3D,
   polygon: PolygonPoint[],
   color: string,
   size: number,
@@ -454,7 +479,7 @@ function addVertexHandles(
   if (polygon.length === 0) return;
   const points = polygon.map(([x, y]) => new THREE.Vector3(x, y, z));
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  scene.add(
+  target.add(
     new THREE.Points(
       geometry,
       new THREE.PointsMaterial({ color, size, sizeAttenuation: false })
@@ -478,6 +503,13 @@ function disposeScene(scene: THREE.Scene) {
     disposeObject(child);
   }
   scene.clear();
+}
+
+function disposeGroup(group: THREE.Group) {
+  for (const child of [...group.children]) {
+    group.remove(child);
+    disposeObject(child);
+  }
 }
 
 function disposeObject(object: THREE.Object3D) {

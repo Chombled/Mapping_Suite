@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { editorReducer, initialEditorState } from "./maskState";
+import { editorReducer, initialEditorState, operationLabel } from "./maskState";
 import type { Project } from "./types";
 
 const project: Project = {
@@ -26,6 +26,7 @@ describe("editorReducer", () => {
     const withLayer = editorReducer(loaded, { type: "add-layer", bounds: project.bounds, polygon });
     expect(withLayer.project?.layers).toHaveLength(1);
     expect(withLayer.project?.layers[0].polygon).toEqual(polygon);
+    expect(withLayer.project?.layers[0].operation).toBe("union");
     expect(withLayer.project?.layers[0].z_min).toBe(project.bounds.min_z);
     expect(withLayer.project?.layers[0].z_max).toBe(project.bounds.max_z);
 
@@ -56,5 +57,11 @@ describe("editorReducer", () => {
     expect(withCursor.project?.view.cursor_x).toBe(3);
     expect(withCursor.project?.view.cursor_y).toBe(4);
     expect(withCursor.past).toHaveLength(0);
+  });
+
+  it("labels set operations", () => {
+    expect(operationLabel("union")).toBe("Union");
+    expect(operationLabel("difference")).toBe("Difference");
+    expect(operationLabel("intersection")).toBe("Intersection");
   });
 });

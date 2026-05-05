@@ -104,7 +104,7 @@ function createLayer(bounds: Bounds, polygon: Array<[number, number]>): PolygonL
   return {
     id: crypto.randomUUID(),
     name: "Polygon mask",
-    operation: "subtract",
+    operation: "union",
     enabled: true,
     polygon,
     z_min: bounds.min_z,
@@ -123,5 +123,7 @@ function moveLayer(layers: PolygonLayer[], id: string, direction: -1 | 1): Polyg
 }
 
 export function operationLabel(operation: LayerOperation): string {
-  return operation === "add" ? "Add" : operation === "subtract" ? "Subtract" : "Intersect";
+  if (operation === "union") return "Union";
+  if (operation === "difference") return "Difference";
+  return "Intersection";
 }

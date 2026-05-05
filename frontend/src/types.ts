@@ -1,4 +1,4 @@
-export type LayerOperation = "add" | "subtract" | "intersect";
+export type LayerOperation = "union" | "difference" | "intersection";
 export type ExportKind = "cloud" | "mask";
 export type SidePlane = "xz" | "yz";
 

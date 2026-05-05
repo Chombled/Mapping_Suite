@@ -39,7 +39,7 @@ export function LayerPanel({ layers, activeLayerId, onActive, onUpdate, onDelete
               value={layer.operation}
               onChange={(event) => onUpdate(layer.id, { operation: event.target.value as LayerOperation })}
             >
-              {(["add", "subtract", "intersect"] as LayerOperation[]).map((operation) => (
+              {(["union", "difference", "intersection"] as LayerOperation[]).map((operation) => (
                 <option value={operation} key={operation}>
                   {operationLabel(operation)}
                 </option>

@@ -26,8 +26,8 @@ def test_import_preview_and_export_mask(tmp_path: Path, monkeypatch) -> None:
     project["layers"] = [
         {
             "id": "layer-1",
-            "name": "remove first",
-            "operation": "subtract",
+            "name": "keep first",
+            "operation": "union",
             "enabled": True,
             "polygon": [[-1, -1], [0.5, -1], [0.5, 0.5], [-1, 0.5]],
             "z_min": -1,
@@ -39,7 +39,7 @@ def test_import_preview_and_export_mask(tmp_path: Path, monkeypatch) -> None:
         json={"cache_id": cache_id, "project": project, "chunk_ids": [0]},
     )
     assert preview_response.status_code == 200
-    assert preview_response.json()["chunks"]["0"] == [False, True, True]
+    assert preview_response.json()["chunks"]["0"] == [True, False, False]
 
     target = tmp_path / "mask.npy"
     export_response = client.post(
@@ -47,8 +47,8 @@ def test_import_preview_and_export_mask(tmp_path: Path, monkeypatch) -> None:
         json={"project": project, "kind": "mask", "target_path": str(target)},
     )
     assert export_response.status_code == 200
-    assert export_response.json()["kept_count"] == 2
-    assert np.load(target).tolist() == [False, True, True]
+    assert export_response.json()["kept_count"] == 1
+    assert np.load(target).tolist() == [True, False, False]
 
 
 def test_upload_import_copies_file_into_cache(tmp_path: Path, monkeypatch) -> None:

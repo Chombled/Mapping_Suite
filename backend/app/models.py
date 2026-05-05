@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-LayerOperation = Literal["add", "subtract", "intersect"]
+LayerOperation = Literal["union", "difference", "intersection"]
 ExportKind = Literal["cloud", "mask"]
 Plane = Literal["xz", "yz"]
 
@@ -43,11 +43,22 @@ class Bounds(BaseModel):
 class PolygonLayer(BaseModel):
     id: str
     name: str
-    operation: LayerOperation = "subtract"
+    operation: LayerOperation = "union"
     enabled: bool = True
     polygon: list[tuple[float, float]] = Field(default_factory=list)
     z_min: float
     z_max: float
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def normalize_operation(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        return {
+            "add": "union",
+            "subtract": "difference",
+            "intersect": "intersection",
+        }.get(value, value)
 
     @field_validator("polygon")
     @classmethod

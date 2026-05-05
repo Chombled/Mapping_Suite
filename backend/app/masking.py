@@ -45,19 +45,20 @@ def evaluate_keep_mask(
     points: np.ndarray, root_crop: Bounds, layers: list[PolygonLayer]
 ) -> np.ndarray:
     root = bounds_mask(points, root_crop)
-    keep = root.copy()
+    enabled_layers = [layer for layer in layers if layer.enabled]
+    if not enabled_layers:
+        return root
 
-    for layer in layers:
-        if not layer.enabled:
-            continue
+    selection = np.zeros(points.shape[0], dtype=bool)
+    for layer in enabled_layers:
         current = layer_mask(points, layer) & root
-        if layer.operation == "add":
-            keep |= current
-        elif layer.operation == "subtract":
-            keep &= ~current
-        elif layer.operation == "intersect":
-            keep &= current
+        if layer.operation == "union":
+            selection |= current
+        elif layer.operation == "difference":
+            selection &= ~current
+        elif layer.operation == "intersection":
+            selection &= current
         else:
             raise ValueError(f"Unsupported layer operation: {layer.operation}")
 
-    return keep
+    return root & selection

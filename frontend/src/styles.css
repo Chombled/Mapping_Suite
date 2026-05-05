@@ -47,6 +47,11 @@ button:hover:not(:disabled) {
   background: #31414a;
 }
 
+button.active {
+  background: #315665;
+  border-color: #4d7f93;
+}
+
 button:disabled {
   color: #73818a;
   cursor: not-allowed;
@@ -260,6 +265,10 @@ label {
   min-height: 0;
   position: relative;
   touch-action: none;
+}
+
+.three-host.drawing {
+  cursor: crosshair;
 }
 
 .three-host:active {

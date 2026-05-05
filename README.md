@@ -6,7 +6,9 @@ This repository currently contains an MVP point-cloud mask editor:
 
 - Python/FastAPI backend for `PCD`/`PLY` import, preview chunking, project JSON, exact mask evaluation, and export.
 - React/TypeScript frontend with a birdseye XY view, side-slice view, root crop controls, polygon mask layers, undo/redo, and cloud or `.npy` mask export.
-- Mask semantics: `true` means keep the point. The global XYZ crop is applied first, then ordered polygon layers apply `add`, `subtract`, or `intersect`.
+- Mask semantics: `true` means keep the point. The global XYZ crop is a hard outer bound.
+  Enabled polygon layers build an ordered selection with `union`, `difference`, and
+  `intersection`; if no polygon layers are enabled, only the root crop applies.
 
 ## Backend
 

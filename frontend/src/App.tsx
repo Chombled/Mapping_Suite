@@ -15,6 +15,7 @@ import { LayerPanel } from "./components/LayerPanel";
 import { PointCloudCanvas } from "./components/PointCloudCanvas";
 import { SideSliceView } from "./components/SideSliceView";
 import { editorReducer, initialEditorState } from "./maskState";
+import { type PolygonPoint, replacePolygonVertex } from "./polygonEditing";
 import type { ChunkMetadata, ExportKind, PointCloudMetadata, Project } from "./types";
 
 interface ChunkPayload {
@@ -34,8 +35,37 @@ export default function App() {
   const [chunks, setChunks] = useState<ChunkPayload[]>([]);
   const [status, setStatus] = useState("Import a PCD or PLY file to begin.");
   const [busy, setBusy] = useState(false);
+  const [draftPolygon, setDraftPolygon] = useState<PolygonPoint[] | null>(null);
 
   const project = state.project;
+
+  useEffect(() => {
+    setDraftPolygon(null);
+  }, [project?.cache_id]);
+
+  useEffect(() => {
+    if (draftPolygon === null) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDraftPolygon(null);
+        setStatus("Polygon drawing canceled.");
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !event.shiftKey) {
+        event.preventDefault();
+        setDraftPolygon((current) => {
+          if (current === null) return null;
+          return current.slice(0, -1);
+        });
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [draftPolygon]);
 
   useEffect(() => {
     if (!project || chunks.length === 0) return;
@@ -151,6 +181,42 @@ export default function App() {
     }
   }
 
+  function handleStartPolygon() {
+    if (!project) return;
+    dispatch({ type: "set-active-layer", id: null });
+    setDraftPolygon([]);
+    setStatus("Drawing polygon.");
+  }
+
+  function handleDraftPoint(point: PolygonPoint) {
+    setDraftPolygon((current) => (current === null ? null : [...current, point]));
+  }
+
+  function handleDraftComplete(polygon: PolygonPoint[]) {
+    if (!project || polygon.length < 3) return;
+    dispatch({ type: "add-layer", bounds: project.bounds, polygon });
+    setDraftPolygon(null);
+    setStatus("Polygon layer added.");
+  }
+
+  function handleVertexMove(layerId: string, vertexIndex: number, point: PolygonPoint) {
+    const layer = project?.layers.find((candidate) => candidate.id === layerId);
+    if (!layer) return;
+    dispatch({
+      type: "update-layer",
+      id: layerId,
+      patch: { polygon: replacePolygonVertex(layer.polygon, vertexIndex, point) }
+    });
+  }
+
+  function handleUndo() {
+    if (draftPolygon !== null) {
+      setDraftPolygon(draftPolygon.slice(0, -1));
+      return;
+    }
+    dispatch({ type: "undo" });
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -237,10 +303,18 @@ export default function App() {
             <section className="panel">
               <div className="section-title">Layers</div>
               <div className="button-row">
-                <button onClick={() => dispatch({ type: "add-layer", bounds: project.bounds })}>
-                  <Plus size={16} /> Polygon
+                <button
+                  className={draftPolygon !== null ? "active" : ""}
+                  onClick={handleStartPolygon}
+                  title="Draw polygon"
+                >
+                  <Plus size={16} /> {draftPolygon !== null ? "Drawing" : "Polygon"}
                 </button>
-                <button disabled={state.past.length === 0} onClick={() => dispatch({ type: "undo" })} title="Undo">
+                <button
+                  disabled={draftPolygon === null && state.past.length === 0}
+                  onClick={handleUndo}
+                  title="Undo"
+                >
                   <Undo2 size={16} />
                 </button>
                 <button disabled={state.future.length === 0} onClick={() => dispatch({ type: "redo" })} title="Redo">
@@ -292,7 +366,11 @@ export default function App() {
             project={project}
             chunks={chunks}
             activeLayerId={state.activeLayerId}
+            draftPolygon={draftPolygon}
             onCursor={(x, y) => dispatch({ type: "set-cursor", x, y })}
+            onDraftPoint={handleDraftPoint}
+            onDraftComplete={handleDraftComplete}
+            onVertexMove={handleVertexMove}
           />
           <SideSliceView project={project} chunks={chunks} chunkMetadata={chunkMetadata} />
         </div>

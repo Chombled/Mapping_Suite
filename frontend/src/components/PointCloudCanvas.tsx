@@ -1,7 +1,14 @@
 import { RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
+import {
+  findHitVertex,
+  isClickDistance,
+  isCloseToFirstVertex,
+  type PolygonPoint,
+  replacePolygonVertex
+} from "../polygonEditing";
 import type { Project } from "../types";
 import {
   type BirdseyeViewport,
@@ -22,17 +29,54 @@ interface Props {
   project: Project | null;
   chunks: ChunkPayload[];
   activeLayerId: string | null;
+  draftPolygon: PolygonPoint[] | null;
   onCursor: (x: number, y: number) => void;
+  onDraftPoint: (point: PolygonPoint) => void;
+  onDraftComplete: (polygon: PolygonPoint[]) => void;
+  onVertexMove: (layerId: string, vertexIndex: number, point: PolygonPoint) => void;
 }
 
-export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: Props) {
+interface PanDrag {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastY: number;
+  hasPanned: boolean;
+}
+
+interface VertexDrag {
+  pointerId: number;
+  layerId: string;
+  vertexIndex: number;
+}
+
+interface DragPreview {
+  layerId: string;
+  vertexIndex: number;
+  point: PolygonPoint;
+}
+
+export function PointCloudCanvas({
+  project,
+  chunks,
+  activeLayerId,
+  draftPolygon,
+  onCursor,
+  onDraftPoint,
+  onDraftComplete,
+  onVertexMove
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const viewportRef = useRef<BirdseyeViewport | null>(null);
   const projectKeyRef = useRef<string | null>(null);
-  const dragRef = useRef<{ pointerId: number; lastX: number; lastY: number } | null>(null);
+  const panDragRef = useRef<PanDrag | null>(null);
+  const vertexDragRef = useRef<VertexDrag | null>(null);
+  const dragPreviewRef = useRef<DragPreview | null>(null);
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
 
   const activeLayer = useMemo(
     () => project?.layers.find((layer) => layer.id === activeLayerId) ?? null,
@@ -41,6 +85,7 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
   const projectKey = project ? `${project.source_path}:${project.cache_id}` : null;
   const colorMode = project?.view.color_mode;
   const bounds = project?.bounds;
+  const layers = project?.layers;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -121,22 +166,59 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
       scene.add(new THREE.Points(geometry, material));
     }
 
-    if (activeLayer && activeLayer.polygon.length >= 3) {
-      const points = [...activeLayer.polygon, activeLayer.polygon[0]].map(
-        ([x, y]) => new THREE.Vector3(x, y, 1)
-      );
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#f6c453" })));
+    for (const layer of project.layers) {
+      if (!layer.enabled || layer.polygon.length < 3) continue;
+      const isActive = layer.id === activeLayerId;
+      const polygon =
+        dragPreview && dragPreview.layerId === layer.id
+          ? replacePolygonVertex(layer.polygon, dragPreview.vertexIndex, dragPreview.point)
+          : layer.polygon;
+      addPolygonLine(scene, polygon, isActive ? "#f6c453" : "#7da7b5", isActive ? 3 : 2, true);
+      if (isActive && draftPolygon === null) {
+        addVertexHandles(scene, polygon, "#f6c453", 9, 4);
+      }
+    }
+
+    if (draftPolygon !== null) {
+      addPolygonLine(scene, draftPolygon, "#f6c453", 5, false);
+      addVertexHandles(scene, draftPolygon, "#f6c453", 8, 6);
+      if (draftPolygon.length >= 3) {
+        addVertexHandles(scene, [draftPolygon[0]], "#edf4f7", 12, 7);
+      }
     }
 
     renderCurrentView();
-  }, [chunks, projectKey, colorMode, bounds, activeLayer]);
+  }, [chunks, projectKey, colorMode, bounds, layers, activeLayerId, draftPolygon, dragPreview]);
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
     if (!project || !containerRef.current || !viewportRef.current) return;
 
-    if (dragRef.current) {
-      const drag = dragRef.current;
+    if (vertexDragRef.current) {
+      const world = pointerToWorld(event);
+      if (world) {
+        const preview = {
+          ...vertexDragRef.current,
+          point: [world.x, world.y] as PolygonPoint
+        };
+        dragPreviewRef.current = preview;
+        setDragPreview(preview);
+        onCursor(world.x, world.y);
+      }
+      return;
+    }
+
+    if (panDragRef.current) {
+      const drag = panDragRef.current;
+      if (
+        !drag.hasPanned &&
+        isClickDistance(
+          { x: drag.startX, y: drag.startY },
+          { x: event.clientX, y: event.clientY }
+        )
+      ) {
+        return;
+      }
+
       const rect = containerRef.current.getBoundingClientRect();
       viewportRef.current = panViewport(
         viewportRef.current,
@@ -145,7 +227,12 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
         rect.width,
         rect.height
       );
-      dragRef.current = { ...drag, lastX: event.clientX, lastY: event.clientY };
+      panDragRef.current = {
+        ...drag,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        hasPanned: true
+      };
       renderCurrentView();
     }
 
@@ -158,13 +245,57 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!project || event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { pointerId: event.pointerId, lastX: event.clientX, lastY: event.clientY };
+    const screen = pointerToScreen(event);
+
+    if (screen && draftPolygon === null) {
+      const vertexIndex = hitActiveVertex(screen);
+      if (vertexIndex !== null && activeLayer) {
+        vertexDragRef.current = {
+          pointerId: event.pointerId,
+          layerId: activeLayer.id,
+          vertexIndex
+        };
+        return;
+      }
+    }
+
+    panDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      hasPanned: false
+    };
   }
 
   function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    if (dragRef.current?.pointerId === event.pointerId) {
+    if (vertexDragRef.current?.pointerId === event.pointerId) {
       event.currentTarget.releasePointerCapture(event.pointerId);
-      dragRef.current = null;
+      const preview = dragPreviewRef.current;
+      vertexDragRef.current = null;
+      dragPreviewRef.current = null;
+      setDragPreview(null);
+      if (preview) {
+        onVertexMove(preview.layerId, preview.vertexIndex, preview.point);
+      }
+      return;
+    }
+
+    if (panDragRef.current?.pointerId === event.pointerId) {
+      const drag = panDragRef.current;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      panDragRef.current = null;
+      if (
+        draftPolygon !== null &&
+        !drag.hasPanned &&
+        isClickDistance(
+          { x: drag.startX, y: drag.startY },
+          { x: event.clientX, y: event.clientY }
+        )
+      ) {
+        handleDraftClick(event);
+      }
     }
   }
 
@@ -211,6 +342,47 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
     );
   }
 
+  function pointerToScreen(event: React.PointerEvent<HTMLDivElement>) {
+    if (!containerRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+  function handleDraftClick(event: React.PointerEvent<HTMLDivElement>) {
+    if (draftPolygon === null || !viewportRef.current || !containerRef.current) return;
+    const screen = pointerToScreen(event);
+    const world = pointerToWorld(event);
+    if (!screen || !world) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const firstVertexScreenPoint =
+      draftPolygon.length > 0
+        ? worldToScreen(viewportRef.current, draftPolygon[0], rect.width, rect.height)
+        : null;
+
+    if (
+      firstVertexScreenPoint &&
+      isCloseToFirstVertex(screen, firstVertexScreenPoint, draftPolygon.length)
+    ) {
+      onDraftComplete(draftPolygon);
+      return;
+    }
+
+    onDraftPoint([world.x, world.y]);
+  }
+
+  function hitActiveVertex(screen: { x: number; y: number }): number | null {
+    if (!activeLayer?.enabled || !viewportRef.current || !containerRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    const vertexScreenPoints = activeLayer.polygon.map((point) =>
+      worldToScreen(viewportRef.current as BirdseyeViewport, point, rect.width, rect.height)
+    );
+    return findHitVertex(screen, vertexScreenPoints);
+  }
+
   function renderCurrentView() {
     const scene = sceneRef.current;
     const renderer = rendererRef.current;
@@ -232,7 +404,7 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
         </button>
       </div>
       <div
-        className={dragRef.current ? "three-host panning" : "three-host"}
+        className={draftPolygon !== null ? "three-host drawing" : "three-host"}
         ref={containerRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -243,6 +415,50 @@ export function PointCloudCanvas({ project, chunks, activeLayerId, onCursor }: P
         {!project && <div className="placeholder">No map loaded</div>}
       </div>
     </div>
+  );
+}
+
+function worldToScreen(
+  viewport: BirdseyeViewport,
+  point: PolygonPoint,
+  screenWidth: number,
+  screenHeight: number
+): { x: number; y: number } {
+  return {
+    x: ((point[0] - (viewport.centerX - viewport.width / 2)) / viewport.width) * screenWidth,
+    y: ((viewport.centerY + viewport.height / 2 - point[1]) / viewport.height) * screenHeight
+  };
+}
+
+function addPolygonLine(
+  scene: THREE.Scene,
+  polygon: PolygonPoint[],
+  color: string,
+  z: number,
+  closed: boolean
+) {
+  if (polygon.length < 2) return;
+  const linePoints = closed && polygon.length >= 3 ? [...polygon, polygon[0]] : polygon;
+  const points = linePoints.map(([x, y]) => new THREE.Vector3(x, y, z));
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  scene.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color })));
+}
+
+function addVertexHandles(
+  scene: THREE.Scene,
+  polygon: PolygonPoint[],
+  color: string,
+  size: number,
+  z: number
+) {
+  if (polygon.length === 0) return;
+  const points = polygon.map(([x, y]) => new THREE.Vector3(x, y, z));
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  scene.add(
+    new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({ color, size, sizeAttenuation: false })
+    )
   );
 }
 

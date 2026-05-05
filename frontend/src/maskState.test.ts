@@ -16,15 +16,45 @@ const project: Project = {
 };
 
 describe("editorReducer", () => {
-  it("adds layers and supports undo/redo", () => {
+  it("adds completed polygon layers and supports undo/redo", () => {
+    const polygon: Array<[number, number]> = [
+      [1, 1],
+      [4, 1],
+      [2, 3]
+    ];
     const loaded = editorReducer(initialEditorState, { type: "set-project", project });
-    const withLayer = editorReducer(loaded, { type: "add-layer", bounds: project.bounds });
+    const withLayer = editorReducer(loaded, { type: "add-layer", bounds: project.bounds, polygon });
     expect(withLayer.project?.layers).toHaveLength(1);
+    expect(withLayer.project?.layers[0].polygon).toEqual(polygon);
+    expect(withLayer.project?.layers[0].z_min).toBe(project.bounds.min_z);
+    expect(withLayer.project?.layers[0].z_max).toBe(project.bounds.max_z);
 
     const undone = editorReducer(withLayer, { type: "undo" });
     expect(undone.project?.layers).toHaveLength(0);
 
     const redone = editorReducer(undone, { type: "redo" });
     expect(redone.project?.layers).toHaveLength(1);
+  });
+
+  it("ignores invalid polygon layers", () => {
+    const loaded = editorReducer(initialEditorState, { type: "set-project", project });
+    const withInvalidLayer = editorReducer(loaded, {
+      type: "add-layer",
+      bounds: project.bounds,
+      polygon: [
+        [1, 1],
+        [2, 2]
+      ]
+    });
+    expect(withInvalidLayer.project?.layers).toHaveLength(0);
+    expect(withInvalidLayer.past).toHaveLength(0);
+  });
+
+  it("does not add cursor movement to undo history", () => {
+    const loaded = editorReducer(initialEditorState, { type: "set-project", project });
+    const withCursor = editorReducer(loaded, { type: "set-cursor", x: 3, y: 4 });
+    expect(withCursor.project?.view.cursor_x).toBe(3);
+    expect(withCursor.project?.view.cursor_y).toBe(4);
+    expect(withCursor.past).toHaveLength(0);
   });
 });

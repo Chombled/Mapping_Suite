@@ -10,7 +10,7 @@ export interface EditorState {
 export type EditorAction =
   | { type: "set-project"; project: Project }
   | { type: "set-root-crop"; bounds: Bounds }
-  | { type: "add-layer"; bounds: Bounds }
+  | { type: "add-layer"; bounds: Bounds; polygon: Array<[number, number]> }
   | { type: "update-layer"; id: string; patch: Partial<PolygonLayer> }
   | { type: "delete-layer"; id: string }
   | { type: "set-active-layer"; id: string | null }
@@ -56,6 +56,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     return { ...state, activeLayerId: action.id };
   }
   if (!state.project) return state;
+  if (action.type === "set-cursor") {
+    return { ...state, project: reduceProject(state.project, action) };
+  }
 
   const project = reduceProject(state.project, action);
   if (project === state.project) return state;
@@ -73,7 +76,8 @@ function reduceProject(project: Project, action: EditorAction): Project {
     case "set-root-crop":
       return { ...project, root_crop: action.bounds };
     case "add-layer":
-      return { ...project, layers: [...project.layers, defaultLayer(action.bounds)] };
+      if (action.polygon.length < 3) return project;
+      return { ...project, layers: [...project.layers, createLayer(action.bounds, action.polygon)] };
     case "update-layer":
       return {
         ...project,
@@ -96,24 +100,13 @@ function reduceProject(project: Project, action: EditorAction): Project {
   }
 }
 
-function defaultLayer(bounds: Bounds): PolygonLayer {
-  const width = bounds.max_x - bounds.min_x;
-  const height = bounds.max_y - bounds.min_y;
-  const cx = bounds.min_x + width / 2;
-  const cy = bounds.min_y + height / 2;
-  const sx = Math.max(width * 0.1, 1);
-  const sy = Math.max(height * 0.1, 1);
+function createLayer(bounds: Bounds, polygon: Array<[number, number]>): PolygonLayer {
   return {
     id: crypto.randomUUID(),
     name: "Polygon mask",
     operation: "subtract",
     enabled: true,
-    polygon: [
-      [cx - sx, cy - sy],
-      [cx + sx, cy - sy],
-      [cx + sx, cy + sy],
-      [cx - sx, cy + sy]
-    ],
+    polygon,
     z_min: bounds.min_z,
     z_max: bounds.max_z
   };

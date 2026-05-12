@@ -1,4 +1,4 @@
-import type { Bounds, LayerOperation, PolygonLayer, Project, SidePlane } from "./types";
+import type { Bounds, LayerOperation, PolygonLayer, Project, SidePlane, SliceScope } from "./types";
 
 export interface EditorState {
   past: Project[];
@@ -17,6 +17,7 @@ export type EditorAction =
   | { type: "move-layer"; id: string; direction: -1 | 1 }
   | { type: "set-side-plane"; plane: SidePlane }
   | { type: "set-slice-thickness"; value: number }
+  | { type: "set-slice-scope"; scope: SliceScope }
   | { type: "set-cursor"; x: number; y: number }
   | { type: "undo" }
   | { type: "redo" };
@@ -93,6 +94,8 @@ function reduceProject(project: Project, action: EditorAction): Project {
       return { ...project, view: { ...project.view, side_plane: action.plane } };
     case "set-slice-thickness":
       return { ...project, view: { ...project.view, slice_thickness: action.value } };
+    case "set-slice-scope":
+      return { ...project, view: { ...project.view, slice_scope: action.scope } };
     case "set-cursor":
       return { ...project, view: { ...project.view, cursor_x: action.x, cursor_y: action.y } };
     default:

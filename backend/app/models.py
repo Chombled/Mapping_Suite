@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 LayerOperation = Literal["union", "difference", "intersection"]
 ExportKind = Literal["cloud", "mask"]
 Plane = Literal["xz", "yz"]
+SliceScope = Literal["full", "active_polygon"]
 
 
 class Bounds(BaseModel):
@@ -78,6 +79,7 @@ class PolygonLayer(BaseModel):
 class ViewSettings(BaseModel):
     side_plane: Plane = "xz"
     slice_thickness: float = 1.0
+    slice_scope: SliceScope = "full"
     cursor_x: float | None = None
     cursor_y: float | None = None
     color_mode: Literal["intensity", "height"] = "intensity"

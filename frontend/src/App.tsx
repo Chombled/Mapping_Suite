@@ -38,6 +38,7 @@ export default function App() {
   const [draftPolygon, setDraftPolygon] = useState<PolygonPoint[] | null>(null);
 
   const project = state.project;
+  const activeLayer = project?.layers.find((layer) => layer.id === state.activeLayerId) ?? null;
 
   useEffect(() => {
     setDraftPolygon(null);
@@ -293,11 +294,28 @@ export default function App() {
                   min="0.01"
                   step="0.1"
                   value={project.view.slice_thickness}
+                  disabled={(project.view.slice_scope ?? "full") === "active_polygon"}
                   onChange={(event) =>
                     dispatch({ type: "set-slice-thickness", value: Number(event.target.value) })
                   }
                 />
               </label>
+              <div className="segmented">
+                <button
+                  className={(project.view.slice_scope ?? "full") === "full" ? "active" : ""}
+                  onClick={() => dispatch({ type: "set-slice-scope", scope: "full" })}
+                >
+                  Full
+                </button>
+                <button
+                  className={
+                    (project.view.slice_scope ?? "full") === "active_polygon" ? "active" : ""
+                  }
+                  onClick={() => dispatch({ type: "set-slice-scope", scope: "active_polygon" })}
+                >
+                  Polygon
+                </button>
+              </div>
             </section>
 
             <section className="panel">
@@ -372,7 +390,12 @@ export default function App() {
             onDraftComplete={handleDraftComplete}
             onVertexMove={handleVertexMove}
           />
-          <SideSliceView project={project} chunks={chunks} chunkMetadata={chunkMetadata} />
+          <SideSliceView
+            project={project}
+            chunks={chunks}
+            chunkMetadata={chunkMetadata}
+            activeLayer={activeLayer}
+          />
         </div>
       </section>
     </main>

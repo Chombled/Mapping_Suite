@@ -11,7 +11,14 @@ const project: Project = {
   bounds: { min_x: 0, max_x: 10, min_y: 0, max_y: 10, min_z: 0, max_z: 5 },
   root_crop: { min_x: 0, max_x: 10, min_y: 0, max_y: 10, min_z: 0, max_z: 5 },
   layers: [],
-  view: { side_plane: "xz", slice_thickness: 1, cursor_x: null, cursor_y: null, color_mode: "height" },
+  view: {
+    side_plane: "xz",
+    slice_thickness: 1,
+    slice_scope: "full",
+    cursor_x: null,
+    cursor_y: null,
+    color_mode: "height"
+  },
   export: { kind: "cloud", target_path: null }
 };
 
@@ -57,6 +64,13 @@ describe("editorReducer", () => {
     expect(withCursor.project?.view.cursor_x).toBe(3);
     expect(withCursor.project?.view.cursor_y).toBe(4);
     expect(withCursor.past).toHaveLength(0);
+  });
+
+  it("stores slice scope in undoable view state", () => {
+    const loaded = editorReducer(initialEditorState, { type: "set-project", project });
+    const scoped = editorReducer(loaded, { type: "set-slice-scope", scope: "active_polygon" });
+    expect(scoped.project?.view.slice_scope).toBe("active_polygon");
+    expect(scoped.past).toHaveLength(1);
   });
 
   it("labels set operations", () => {

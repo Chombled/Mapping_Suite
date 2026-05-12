@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   findHitVertex,
+  isPointInPolygon,
   isClickDistance,
   isCloseToFirstVertex,
   replacePolygonVertex
@@ -47,5 +48,17 @@ describe("polygon editing helpers", () => {
       ])
     ).toBe(1);
     expect(findHitVertex({ x: 40, y: 40 }, [{ x: 10, y: 10 }])).toBeNull();
+  });
+
+  it("detects points inside polygon footprints", () => {
+    const polygon: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4]
+    ];
+    expect(isPointInPolygon([2, 2], polygon)).toBe(true);
+    expect(isPointInPolygon([5, 2], polygon)).toBe(false);
+    expect(isPointInPolygon([2, 2], polygon.slice(0, 2))).toBe(false);
   });
 });

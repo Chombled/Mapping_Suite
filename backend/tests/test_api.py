@@ -67,3 +67,35 @@ def test_upload_import_copies_file_into_cache(tmp_path: Path, monkeypatch) -> No
     payload = response.json()
     assert payload["metadata"]["point_count"] == 3
     assert ".mapping_cache/uploads/upload.pcd" in payload["project"]["source_path"]
+
+
+def test_project_load_defaults_missing_slice_scope(tmp_path: Path) -> None:
+    project_path = tmp_path / "legacy.mapping.json"
+    project_path.write_text(
+        """
+        {
+          "source_path": "/tmp/map.pcd",
+          "source_format": "pcd",
+          "cache_id": "cache",
+          "fields": ["x", "y", "z"],
+          "bounds": {"min_x": 0, "max_x": 1, "min_y": 0, "max_y": 1, "min_z": 0, "max_z": 1},
+          "root_crop": {"min_x": 0, "max_x": 1, "min_y": 0, "max_y": 1, "min_z": 0, "max_z": 1},
+          "layers": [],
+          "view": {
+            "side_plane": "xz",
+            "slice_thickness": 1,
+            "cursor_x": null,
+            "cursor_y": null,
+            "color_mode": "height"
+          },
+          "export": {"kind": "cloud", "target_path": null}
+        }
+        """,
+        encoding="utf-8",
+    )
+    client = TestClient(app)
+
+    response = client.post("/api/projects/load", json={"path": str(project_path)})
+
+    assert response.status_code == 200
+    assert response.json()["view"]["slice_scope"] == "full"

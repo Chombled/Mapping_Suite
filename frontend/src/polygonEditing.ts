@@ -48,6 +48,24 @@ export function findHitVertex(
   return hitIndex;
 }
 
+export function isPointInPolygon(point: PolygonPoint, polygon: PolygonPoint[]): boolean {
+  if (polygon.length < 3) return false;
+
+  const [x, y] = point;
+  let inside = false;
+  let previous = polygon[polygon.length - 1];
+
+  for (const current of polygon) {
+    const [xi, yi] = current;
+    const [xj, yj] = previous;
+    const crosses = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi + 1e-12) + xi;
+    if (crosses) inside = !inside;
+    previous = current;
+  }
+
+  return inside;
+}
+
 function distancePx(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }

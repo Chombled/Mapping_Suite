@@ -1,6 +1,7 @@
 export type LayerOperation = "union" | "difference" | "intersection";
 export type ExportKind = "cloud" | "mask";
 export type SidePlane = "xz" | "yz";
+export type SliceScope = "full" | "active_polygon";
 
 export interface Bounds {
   min_x: number;
@@ -24,6 +25,7 @@ export interface PolygonLayer {
 export interface ViewSettings {
   side_plane: SidePlane;
   slice_thickness: number;
+  slice_scope: SliceScope;
   cursor_x: number | null;
   cursor_y: number | null;
   color_mode: "intensity" | "height";

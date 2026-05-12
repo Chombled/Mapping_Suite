@@ -300,19 +300,22 @@ export default function App() {
                   }
                 />
               </label>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={(project.view.slice_scope ?? "full") === "active_polygon"}
-                  onChange={(event) =>
-                    dispatch({
-                      type: "set-slice-scope",
-                      scope: event.target.checked ? "active_polygon" : "full"
-                    })
+              <div className="segmented">
+                <button
+                  className={(project.view.slice_scope ?? "full") === "full" ? "active" : ""}
+                  onClick={() => dispatch({ type: "set-slice-scope", scope: "full" })}
+                >
+                  Full
+                </button>
+                <button
+                  className={
+                    (project.view.slice_scope ?? "full") === "active_polygon" ? "active" : ""
                   }
-                />
-                Active polygon slice
-              </label>
+                  onClick={() => dispatch({ type: "set-slice-scope", scope: "active_polygon" })}
+                >
+                  Polygon
+                </button>
+              </div>
             </section>
 
             <section className="panel">

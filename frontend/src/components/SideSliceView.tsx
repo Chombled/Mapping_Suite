@@ -25,8 +25,9 @@ export function SideSliceView({ project, chunks, chunkMetadata, activeLayer }: P
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    const width = canvas.clientWidth * window.devicePixelRatio;
-    const height = canvas.clientHeight * window.devicePixelRatio;
+    const pixelRatio = window.devicePixelRatio;
+    const width = canvas.clientWidth * pixelRatio;
+    const height = canvas.clientHeight * pixelRatio;
     canvas.width = width;
     canvas.height = height;
     context.clearRect(0, 0, width, height);
@@ -44,8 +45,13 @@ export function SideSliceView({ project, chunks, chunkMetadata, activeLayer }: P
     const polygonMode = sliceScope === "active_polygon";
 
     if (polygonMode && (!activeLayer || activeLayer.polygon.length < 3)) {
+      context.save();
       context.fillStyle = "#7d8992";
-      context.fillText("Select a polygon layer to inspect its slice", 20, 28);
+      context.font = `${16 * pixelRatio}px Inter, ui-sans-serif, system-ui, sans-serif`;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText("Select a polygon layer to inspect its slice", width / 2, height / 2);
+      context.restore();
       return;
     }
 

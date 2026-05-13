@@ -14,7 +14,6 @@ from app.masking import evaluate_keep_mask
 from app.models import (
     ExportRequest,
     ExportResponse,
-    ImportRequest,
     ImportResponse,
     PreviewMaskRequest,
     PreviewMaskResponse,
@@ -38,24 +37,6 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.post("/api/import", response_model=ImportResponse)
-def import_point_cloud(request: ImportRequest) -> ImportResponse:
-    try:
-        source = Path(request.source_path).expanduser().resolve()
-        return _import_from_source(source, request.cache_root)
-    except PermissionError as exc:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Permission denied while reading '{request.source_path}'. "
-                "Use the file picker import, move the file into this project folder, "
-                "or start the backend from a terminal with permission to read that path."
-            ),
-        ) from exc
-    except (OSError, PointCloudError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/import/upload", response_model=ImportResponse)
@@ -144,6 +125,7 @@ def preview_mask(request: PreviewMaskRequest) -> PreviewMaskResponse:
 def save_project(request: ProjectPathRequest) -> dict[str, str]:
     if request.project is None:
         raise HTTPException(status_code=400, detail="project is required")
+    _validate_upload_source(request.project)
     target = Path(request.path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(request.project.model_dump_json(indent=2), encoding="utf-8")
@@ -154,7 +136,9 @@ def save_project(request: ProjectPathRequest) -> dict[str, str]:
 def load_project(request: ProjectPathRequest) -> Project:
     try:
         source = Path(request.path).expanduser().resolve()
-        return Project.model_validate_json(source.read_text(encoding="utf-8"))
+        project = Project.model_validate_json(source.read_text(encoding="utf-8"))
+        _validate_upload_source(project)
+        return project
     except (OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -162,6 +146,7 @@ def load_project(request: ProjectPathRequest) -> Project:
 @app.post("/api/export", response_model=ExportResponse)
 def export_project(request: ExportRequest) -> ExportResponse:
     try:
+        _validate_upload_source(request.project)
         cloud = read_point_cloud(request.project.source_path)
         keep_mask = evaluate_keep_mask(
             cloud.points, request.project.root_crop, request.project.layers
@@ -185,3 +170,15 @@ def export_project(request: ExportRequest) -> ExportResponse:
         total_count=int(keep_mask.shape[0]),
         kept_count=int(keep_mask.sum()),
     )
+
+
+def _validate_upload_source(project: Project) -> None:
+    upload_directory = upload_root().resolve()
+    source = Path(project.source_path).expanduser().resolve()
+    try:
+        source.relative_to(upload_directory)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Project source_path must point inside .mapping_cache/uploads.",
+        ) from exc

@@ -3,7 +3,6 @@ import { useEffect, useReducer, useState } from "react";
 
 import {
   exportProject,
-  importPointCloud,
   loadChunk,
   loadChunkMetadata,
   loadProject,
@@ -26,7 +25,6 @@ interface ChunkPayload {
 
 export default function App() {
   const [state, dispatch] = useReducer(editorReducer, initialEditorState);
-  const [sourcePath, setSourcePath] = useState("");
   const [projectPath, setProjectPath] = useState("");
   const [exportPath, setExportPath] = useState("");
   const [exportKind, setExportKind] = useState<ExportKind>("cloud");
@@ -101,7 +99,7 @@ export default function App() {
     setChunks(chunkBuffers);
   }
 
-  async function applyImportResponse(response: Awaited<ReturnType<typeof importPointCloud>>) {
+  async function applyImportResponse(response: Awaited<ReturnType<typeof uploadPointCloud>>) {
     dispatch({ type: "set-project", project: response.project });
     setMetadata(response.metadata);
     setProjectPath(`${response.project.source_path}.mapping.json`);
@@ -114,24 +112,11 @@ export default function App() {
     setStatus(`Loaded ${response.metadata.point_count.toLocaleString()} points.`);
   }
 
-  async function handleImport() {
-    setBusy(true);
-    try {
-      const response = await importPointCloud(sourcePath);
-      await applyImportResponse(response);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Import failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleUpload(file: File | null) {
     if (!file) return;
     setBusy(true);
     try {
       const response = await uploadPointCloud(file);
-      setSourcePath(response.project.source_path);
       await applyImportResponse(response);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Upload import failed.");
@@ -223,17 +208,6 @@ export default function App() {
       <aside className="sidebar">
         <section className="panel">
           <div className="section-title">Import</div>
-          <label>
-            Source path
-            <input
-              value={sourcePath}
-              onChange={(event) => setSourcePath(event.target.value)}
-              placeholder="/path/to/map.pcd"
-            />
-          </label>
-          <button disabled={!sourcePath || busy} onClick={handleImport}>
-            <FolderOpen size={16} /> Import
-          </button>
           <label className="file-import">
             Choose PCD/PLY file
             <input

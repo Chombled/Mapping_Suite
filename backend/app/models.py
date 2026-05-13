@@ -112,11 +112,6 @@ class Project(BaseModel):
     export: ExportPreferences = Field(default_factory=ExportPreferences)
 
 
-class ImportRequest(BaseModel):
-    source_path: str
-    cache_root: str | None = None
-
-
 class ImportResponse(BaseModel):
     metadata: PointCloudMetadata
     project: Project

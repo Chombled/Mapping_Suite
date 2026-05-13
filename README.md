@@ -30,9 +30,8 @@ npm run dev
 
 The frontend runs at `http://127.0.0.1:5173` and proxies `/api` calls to the backend.
 
-Use the file picker when the backend cannot read a typed source path because of operating-system
-permissions. Typed paths still reference the original file; file-picker imports copy the selected
-map into `.mapping_cache/uploads/` before preprocessing.
+Point-cloud imports use the file picker. Selected maps are copied into
+`.mapping_cache/uploads/` before preprocessing, and saved projects reference that cached copy.
 
 ## Verification
 

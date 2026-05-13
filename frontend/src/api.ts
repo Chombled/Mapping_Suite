@@ -10,17 +10,6 @@ async function assertOk(response: Response): Promise<Response> {
   throw new Error(payload.detail ?? response.statusText);
 }
 
-export async function importPointCloud(sourcePath: string): Promise<ImportResponse> {
-  const response = await assertOk(
-    await fetch("/api/import", {
-      method: "POST",
-      headers: jsonHeaders,
-      body: JSON.stringify({ source_path: sourcePath })
-    })
-  );
-  return response.json();
-}
-
 export async function uploadPointCloud(file: File): Promise<ImportResponse> {
   const body = new FormData();
   body.append("file", file);

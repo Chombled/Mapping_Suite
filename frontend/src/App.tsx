@@ -13,6 +13,7 @@ import {
 import { LayerPanel } from "./components/LayerPanel";
 import { PointCloudCanvas } from "./components/PointCloudCanvas";
 import { SideSliceView } from "./components/SideSliceView";
+import { defaultExportPath, exportPathForKind } from "./exportPath";
 import { editorReducer, initialEditorState } from "./maskState";
 import { type PolygonPoint, replacePolygonVertex } from "./polygonEditing";
 import type { ChunkMetadata, ExportKind, PointCloudMetadata, Project } from "./types";
@@ -103,11 +104,8 @@ export default function App() {
     dispatch({ type: "set-project", project: response.project });
     setMetadata(response.metadata);
     setProjectPath(`${response.project.source_path}.mapping.json`);
-    setExportPath(
-      response.project.source_format === "pcd"
-        ? response.project.source_path.replace(/\.pcd$/i, ".pruned.pcd")
-        : response.project.source_path.replace(/\.ply$/i, ".pruned.ply")
-    );
+    setExportKind("cloud");
+    setExportPath(defaultExportPath(response.project, "cloud"));
     await hydrateProject(response.project);
     setStatus(`Loaded ${response.metadata.point_count.toLocaleString()} points.`);
   }
@@ -130,6 +128,13 @@ export default function App() {
     try {
       const loaded = await loadProject(projectPath);
       dispatch({ type: "set-project", project: loaded });
+      const nextExportKind = loaded.export.kind;
+      setExportKind(nextExportKind);
+      setExportPath(
+        loaded.export.target_path
+          ? exportPathForKind(loaded.export.target_path, loaded, nextExportKind)
+          : defaultExportPath(loaded, nextExportKind)
+      );
       await hydrateProject(loaded);
       setStatus("Project loaded.");
     } catch (error) {
@@ -137,6 +142,12 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleExportKindChange(kind: ExportKind) {
+    if (!project) return;
+    setExportKind(kind);
+    setExportPath((currentPath) => exportPathForKind(currentPath, project, kind));
   }
 
   async function handleSaveProject() {
@@ -326,10 +337,16 @@ export default function App() {
             <section className="panel">
               <div className="section-title">Export</div>
               <div className="segmented">
-                <button className={exportKind === "cloud" ? "active" : ""} onClick={() => setExportKind("cloud")}>
+                <button
+                  className={exportKind === "cloud" ? "active" : ""}
+                  onClick={() => handleExportKindChange("cloud")}
+                >
                   Cloud
                 </button>
-                <button className={exportKind === "mask" ? "active" : ""} onClick={() => setExportKind("mask")}>
+                <button
+                  className={exportKind === "mask" ? "active" : ""}
+                  onClick={() => handleExportKindChange("mask")}
+                >
                   Mask
                 </button>
               </div>
